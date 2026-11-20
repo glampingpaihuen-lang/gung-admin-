@@ -4,6 +4,7 @@ import { EmpresaForm } from "@/components/panel/EmpresaForm";
 import { FotosPanel } from "@/components/panel/FotosPanel";
 import { SubirFotos } from "@/components/panel/SubirFotos";
 import { empresaPorId, fotosDe } from "@/lib/store";
+import { maxArchivoMb } from "@/lib/archivos";
 
 export default async function EmpresaPanel({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -25,7 +26,7 @@ export default async function EmpresaPanel({ params }: { params: Promise<{ id: s
             <p className="p-nota">Sube las fotos y videos de esta empresa. En la página se ven en el mismo orden.</p>
           </div>
         </div>
-        <SubirFotos empresaId={empresa.id} />
+        <SubirFotos empresaId={empresa.id} maxMb={maxArchivoMb()} />
         <FotosPanel empresaId={empresa.id} fotos={fotos} />
       </section>
 

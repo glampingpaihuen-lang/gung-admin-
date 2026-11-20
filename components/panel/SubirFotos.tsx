@@ -9,7 +9,7 @@ const A_LA_VEZ = 2; // archivos subiendo al mismo tiempo
 type Estado = { total: number; hechas: number; avance: number; fallas: { nombre: string; msg: string }[]; subiendo: boolean };
 const VACIO: Estado = { total: 0, hechas: 0, avance: 0, fallas: [], subiendo: false };
 
-export function SubirFotos({ empresaId }: { empresaId: string }) {
+export function SubirFotos({ empresaId, maxMb }: { empresaId: string; maxMb: number }) {
   const [estado, setEstado] = useState<Estado>(VACIO);
   const [encima, setEncima] = useState(false);
   const router = useRouter();
@@ -51,15 +51,15 @@ export function SubirFotos({ empresaId }: { empresaId: string }) {
         const i = siguiente++;
         const f = files[i];
         try {
-          const lista = await prepararArchivo(f);
-          const permiso = await prepararSubida(empresaId, [lista.ext]);
+          const lista = await prepararArchivo(f, maxMb);
+          const permiso = await prepararSubida(empresaId, [{ ext: lista.ext, tipo: lista.grande.type, nombre: lista.grande.name }]);
           if (!permiso.ok) throw new Error(permiso.msg);
           const t: Ticket = permiso.tickets[0];
           const peso = lista.grande.size + (lista.mini?.size ?? 0);
           const avanzar = (p: number) => { parcial.set(i, Math.min(0.95, p)); pintar(); };
-          if (t.url) {
-            await subirPut(t.url, lista.grande, p => avanzar((p * lista.grande.size) / peso));
-            if (lista.mini && t.urlMini) await subirPut(t.urlMini, lista.mini, p => avanzar((lista.grande.size + p * lista.mini!.size) / peso));
+          if (t.grande) {
+            await subirPut(t.grande.url, lista.grande, t.grande.headers, p => avanzar((p * lista.grande.size) / peso));
+            if (lista.mini && t.mini) await subirPut(t.mini.url, lista.mini, t.mini.headers, p => avanzar((lista.grande.size + p * lista.mini!.size) / peso));
           } else {
             await subirLocal(t.path, lista.grande, lista.mini, avanzar);
           }
@@ -100,7 +100,7 @@ export function SubirFotos({ empresaId }: { empresaId: string }) {
       >
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17.5h-.5a4 4 0 0 1-.6-7.96A6 6 0 0 1 17.5 8.5a4.5 4.5 0 0 1 .5 8.97M12 11v9m0-9-3.5 3.5M12 11l3.5 3.5" /></svg>
         <b>Arrastra las fotos y videos aquí o toca para elegirlos</b>
-        <span>Se suben en su calidad original (HD). Puedes subir muchos a la vez; quedan en el orden de su nombre, después de los que ya hay. Máximo 50 MB por archivo.</span>
+        <span>Se suben en su calidad original (HD). Puedes subir muchos a la vez; quedan en el orden de su nombre, después de los que ya hay. {maxMb >= 1024 ? "" : `Máximo ${maxMb} MB por archivo.`}</span>
         <input ref={input} type="file" accept="image/*,video/*" multiple disabled={subiendo}
           onChange={e => { const l = [...(e.target.files ?? [])]; e.target.value = ""; void subir(l); }} />
       </label>

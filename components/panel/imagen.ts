@@ -5,7 +5,6 @@
  * - Logos y fondo: más pequeños, conservando la transparencia cuando el navegador puede.
  */
 export const LADO_MINI = 900;
-export const MAX_MB = 50; // Supabase gratis no deja subir archivos más pesados
 
 type Hecha = { blob: Blob; ancho: number; alto: number };
 
@@ -37,12 +36,12 @@ const EXT_VIDEO: Record<string, Ext> = { "video/mp4": "mp4", "video/quicktime": 
 
 const pesoMb = (f: File) => (f.size / 1048576).toFixed(0);
 
-/** Foto o video de la galería: original + miniatura */
-export async function prepararArchivo(f: File): Promise<ArchivoListo> {
+/** Foto o video de la galería: original + miniatura. `maxMb`: lo más pesado que se puede subir. */
+export async function prepararArchivo(f: File, maxMb: number): Promise<ArchivoListo> {
   const nombre = f.name.toLowerCase();
   const esVideo = f.type.startsWith("video/") || /\.(mp4|mov|webm|m4v)$/.test(nombre);
-  if (f.size > MAX_MB * 1048576) {
-    throw new Error(`pesa ${pesoMb(f)} MB y el máximo es ${MAX_MB} MB.${esVideo ? " Recórtalo o grábalo en menor resolución." : ""}`);
+  if (f.size > maxMb * 1048576) {
+    throw new Error(`pesa ${pesoMb(f)} MB y el máximo es ${maxMb} MB.${esVideo ? " Recórtalo o grábalo en menor resolución." : ""}`);
   }
   return esVideo ? prepararVideo(f) : prepararFoto(f);
 }
@@ -132,14 +131,12 @@ export async function prepararImagen(f: File, maxLado: number, relleno: string, 
   }
 }
 
-/** Sube un archivo con un permiso firmado de Supabase, avisando el avance (0 a 1) */
-export function subirPut(url: string, archivo: File, alAvanzar: (p: number) => void) {
+/** Sube un archivo con un permiso firmado (R2 o Supabase), avisando el avance (0 a 1) */
+export function subirPut(url: string, archivo: File, headers: Record<string, string>, alAvanzar: (p: number) => void) {
   return new Promise<void>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", url);
-    xhr.setRequestHeader("content-type", archivo.type);
-    xhr.setRequestHeader("cache-control", "max-age=31536000");
-    xhr.setRequestHeader("x-upsert", "false");
+    for (const [k, v] of Object.entries(headers)) xhr.setRequestHeader(k, v);
     xhr.upload.onprogress = e => { if (e.lengthComputable) alAvanzar(e.loaded / e.total); };
     xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`el servidor de fotos respondió ${xhr.status}`)));
     xhr.onerror = () => reject(new Error("se cortó la conexión"));

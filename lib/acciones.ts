@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { anotarFallo, bloqueado, codigoCorrecto, codigoPanel, COOKIE, crearSesion, exigirPanel, hayPanel, ipCliente } from "./auth";
-import { borrarArchivos, esVideo, EXT_FOTO, EXT_VIDEO, existeArchivo, guardarArchivo, miniDe, nombreNuevo, permisoSubida, RE_FOTO, TIPOS } from "./archivos";
+import { borrarArchivos, esVideo, EXT_FOTO, EXT_VIDEO, existeArchivo, guardarArchivo, MIME, miniDe, nombreNuevo, permisoSubida, RE_FOTO, TIPOS, type Permiso } from "./archivos";
 import {
   actualizarEmpresa, agregarFoto, borrarEmpresa, borrarFotos, crearEmpresa, empresaPorId, guardarAjustes,
   leerAjustes, moverEmpresa, moverFoto, siguienteOrden,
@@ -122,19 +122,25 @@ export async function ordenInicial(empresaId: string): Promise<Resultado<{ orden
   } catch (x) { return fallo(x); }
 }
 
-export type Ticket = { path: string; url: string | null; urlMini: string | null };
+/** Permisos para subir un archivo y su miniatura (null: se sube al servidor del PC) */
+export type Ticket = { path: string; grande: Permiso; mini: Permiso };
+export type PorSubir = { ext: string; tipo: string; nombre: string };
 
-/** Nombres y permisos para subir un grupo de fotos (máximo 20 por vez) */
-export async function prepararSubida(empresaId: string, exts: string[]): Promise<Resultado<{ tickets: Ticket[] }>> {
+/** Nombres y permisos para subir un grupo de fotos y videos (máximo 20 por vez) */
+export async function prepararSubida(empresaId: string, items: PorSubir[]): Promise<Resultado<{ tickets: Ticket[] }>> {
   try {
     await exigirPanel();
     if (!(await empresaPorId(empresaId))) return { ok: false, msg: "Esa empresa ya no existe." };
-    if (!exts.length || exts.length > 20) return { ok: false, msg: "Se suben de a 20 archivos por vez." };
-    const tickets = await Promise.all(exts.map(async ext => {
+    if (!items.length || items.length > 20) return { ok: false, msg: "Se suben de a 20 archivos por vez." };
+    const tickets = await Promise.all(items.map(async ({ ext, tipo, nombre }) => {
       if (![...EXT_FOTO, ...EXT_VIDEO].includes(ext)) throw new Error("Debe ser una foto (JPG, PNG, WebP) o un video (MP4, MOV, WebM).");
       const path = nombreNuevo(`empresas/${empresaId}/fotos`, ext);
-      const [url, urlMini] = await Promise.all([permisoSubida(path), permisoSubida(miniDe(path))]);
-      return { path, url, urlMini };
+      const archivo = String(nombre || "archivo").replace(/[\\/:*?"<>|#%]+/g, "-").slice(0, 100);
+      const [grande, mini] = await Promise.all([
+        permisoSubida(path, tipo || MIME[ext] || "application/octet-stream", archivo),
+        permisoSubida(miniDe(path), "image/jpeg"),
+      ]);
+      return { path, grande, mini };
     }));
     return { ok: true, tickets };
   } catch (x) { return fallo(x); }
